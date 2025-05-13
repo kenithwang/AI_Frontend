@@ -1,0 +1,24 @@
+# Ignore environment files
+backend_fastapi/.env
+
+# Ignore Python virtual environments
+venv/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/editor specific files
+.vscode/
+.idea/
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+
+# Ignore log files
+*.log 

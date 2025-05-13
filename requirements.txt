@@ -1,0 +1,20 @@
+    fastapi
+    uvicorn[standard]
+    pydantic
+    SQLAlchemy>=2.0.0 # 您可以保持现有版本或使用范围
+    psycopg2-binary # 保持现有版本或更新
+    python-dotenv
+    python-multipart
+    openai
+    pydub
+    google-generativeai
+    python-docx
+    # boto3 # Removed as it's no longer needed after disabling COS/OSS upload
+    requests
+    tiktoken
+    # --- 以下是您原来就有的，根据需要保留 ---
+    greenlet 
+    typing_extensions
+    transformers
+    funasr
+    pandas
