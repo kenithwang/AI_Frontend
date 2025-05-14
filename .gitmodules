@@ -1,3 +1,3 @@
 [submodule "backend_fastapi/app/audio2memo"]
 	path = backend_fastapi/app/audio2memo
-	url = ./backend_fastapi/app/audio2memo
+	url = https://github.com/kenithwang/audio2memo.git
