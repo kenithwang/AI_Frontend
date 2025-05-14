@@ -203,11 +203,16 @@ export default {
       }
     },
     validateEmails(emailsString) {
-      if (!emailsString) return []; 
+      if (!emailsString) return [];
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const emails = emailsString.split(';').map(e => e.trim()).filter(e => e);
-      const invalidEmails = emails.filter(email => !emailRegex.test(email));
-      return invalidEmails; 
+      const invalidEmails = [];
+      for (const email of emails) {
+        if (!emailRegex.test(email) || !email.endsWith('@bda.com')) {
+          invalidEmails.push(email);
+        }
+      }
+      return [...new Set(invalidEmails)]; // 返回不重复的无效邮箱列表
     },
     submitForm() {
       if (!this.uploadedFile) {
@@ -229,7 +234,7 @@ export default {
       
       const invalidToEmails = this.validateEmails(processedToEmails);
       if (invalidToEmails.length > 0) {
-        this.currentFeedback = { message: `Invalid "To" email format for: ${invalidToEmails.join(', ')}. Ensure usernames are valid or full emails are correct.`, type: 'error' };
+        this.currentFeedback = { message: `收件人邮箱无效: ${invalidToEmails.join(', ')}。请确保用户名有效或邮箱地址正确，且所有邮箱必须以 @bda.com 结尾。`, type: 'error' };
         this.feedbackTimeout = setTimeout(() => this.clearCurrentFeedback(), 5000);
         return;
       }
@@ -243,7 +248,7 @@ export default {
       }
       const invalidCcEmails = this.validateEmails(this.ccEmails);
       if (invalidCcEmails.length > 0) {
-        this.currentFeedback = { message: `Invalid "Cc" email format: ${invalidCcEmails.join(', ')}`, type: 'error' };
+        this.currentFeedback = { message: `抄送邮箱无效: ${invalidCcEmails.join(', ')}。所有邮箱必须以 @bda.com 结尾。`, type: 'error' };
         this.feedbackTimeout = setTimeout(() => this.clearCurrentFeedback(), 5000);
         return;
       }
