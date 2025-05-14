@@ -13,6 +13,7 @@
 *   **音频上传**: 支持多种常见音频格式（.mp3, .wav, .flac, .ogg, .aac, .m4a, .wma）的文件上传。
 *   **表单填写**: 用户可以指定接收纪要的主送（To）和抄送（Cc）邮箱地址。
     *   主送邮箱支持用户名输入，系统会自动补全 `@bda.com` 后缀。
+    *   所有主送和抄送邮箱地址都会进行验证，确保为有效邮箱格式且必须使用 `@bda.com` 域名。
     *   抄送邮箱提供建议列表，并支持多选。
 *   **任务提交**: 将音频文件和表单信息通过API异步提交到后端进行处理。
 *   **任务状态跟踪**:
@@ -35,7 +36,7 @@
 *   **日志记录**: 将关键操作和错误信息记录到 `transcribe.log` 文件中。
 
 ### 3. AI处理核心 (`audio2memo` 模块)
-该模块集成在后端服务中，负责实际的音频到纪要的转换工作，主要流程如下：
+该模块作为Git子模块集成在后端服务 (`backend_fastapi/app/audio2memo`) 中，负责实际的音频到纪要的转换工作，主要流程如下：
 1.  **音频分割 (`process_audio.py`)**: 将上传的原始音频文件分割成适合后续处理的小片段。
 2.  **语音转文字 (`audio2text.py`)**: 调用 OpenAI Whisper API 将音频片段批量转换为文本。
 3.  **逐字稿生成 (`text_to_wordforword.py`)**: 基于转录文本，调用大语言模型（如Gemini）生成初步的逐字稿。
@@ -59,23 +60,66 @@
     *   `requests`: HTTP请求库。
     *   `tiktoken`: OpenAI Token计数库。
 
-## 四、系统架构与工作流程
+## 四、安装与启动
 
-1.  **用户交互**: 用户通过前端网页上传音频文件并填写邮件等信息。
-2.  **任务提交**: 前端将数据 `POST` 到后端的 `/api/transcribe` 接口。
-3.  **后端接收与初步处理**:
-    *   FastAPI 接收请求，验证数据，保存音频文件到基于 `AUDIO_TARGET_DIR` 的任务专属目录。
-    *   在PostgreSQL数据库中创建一条任务记录，初始状态为 "submitted"。
-    *   将核心的 `audio2memo` 处理流程作为一个后台任务启动。
-    *   立即向前端返回任务ID和任务已受理的消息。
-4.  **后台处理 (`audio2memo` 流程)**:
-    *   后台任务按顺序执行音频分割、转录、逐字稿生成、纪要初稿生成、DOCX文档生成。
-    *   每完成一个关键步骤，后端会更新数据库中对应任务的状态字段（如 `processing_audio_split`, `transcribing`, 等）。
-5.  **前端状态轮询**: 前端通过任务ID定期（每5秒）调用 `/api/tasks` (或 `/api/task_status/{task_id}`) 接口获取最新任务状态。
-6.  **任务完成与通知**:
-    *   处理成功：更新数据库状态为 "completed"，记录结果文件信息，并通过邮件发送包含 `.docx` 附件的成功通知。
-    *   处理失败：更新数据库状态为 "failed"，记录错误信息，并通过邮件发送失败通知。
-7.  **结果展示**: 前端根据轮询到的状态，向用户展示任务进度；任务完成后，用户将通过邮件收到结果。
+1.  **克隆仓库**:
+    ```bash
+    git clone <repository_url>
+    cd AI_Frontend
+    ```
+
+2.  **初始化子模块**:
+    由于 `backend_fastapi/app/audio2memo` 是一个Git子模块，在克隆主仓库后需要初始化并更新子模块：
+    ```bash
+    git submodule init
+    git submodule update
+    ```
+    或者，在克隆时使用 `--recurse-submodules` 选项：
+    ```bash
+    git clone --recurse-submodules <repository_url>
+    cd AI_Frontend
+    ```
+
+3.  **前端设置**:
+    ```bash
+    cd frontend_vue
+    npm install  # 或 yarn install
+    cd ..
+    ```
+
+4.  **后端设置**:
+    *   确保您已安装 Python 3 (推荐 3.9+)。
+    *   安装 `ffmpeg` (pydub 依赖):
+        *   Debian/Ubuntu: `sudo apt update && sudo apt install ffmpeg`
+        *   macOS (使用 Homebrew): `brew install ffmpeg`
+        *   Windows: 下载预编译版本并添加到系统 PATH。
+    *   创建并激活虚拟环境 (推荐):
+        ```bash
+        cd backend_fastapi
+        python -m venv venv
+        source venv/bin/activate  # Linux/macOS
+        # venv\Scripts\activate    # Windows
+        ```
+    *   安装 Python 依赖:
+        ```bash
+        pip install -r requirements.txt
+        cd ..
+        ```
+    *   配置后端环境变量：参见下面的 "五、配置说明"。
+
+5.  **启动服务**:
+    *   **启动后端 FastAPI 服务**:
+        ```bash
+        cd backend_fastapi
+        # 确保虚拟环境已激活
+        uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+        ```
+    *   **启动前端 Vue 开发服务**:
+        ```bash
+        cd frontend_vue
+        npm run dev # 或 yarn dev
+        ```
+    访问前端通常在 `http://localhost:5173` (或其他 Vite 指定的端口)。
 
 ## 五、配置说明
 
@@ -108,11 +152,30 @@ DATABASE_URL="postgresql://user:password@host:port/database"
 ```
 
 **注意**:
-*   确保 `.env` 文件不要提交到版本控制系统（如Git）。应将其添加到 `.gitignore` 文件中。
+*   确保 `.env` 文件不要提交到版本控制系统（如Git）。它已经被添加到根目录的 `.gitignore` 文件中。
+*   前端的 `node_modules/` 目录也已被添加到 `.gitignore`。
 *   对于生产部署，应通过系统环境变量或部署平台提供的配置管理服务来设置这些值。
 *   `ffmpeg` 需要在运行后端的服务器上正确安装，因为 `pydub` 依赖它进行音频处理。
 
-## 六、数据库
+## 六、系统架构与工作流程
+
+1.  **用户交互**: 用户通过前端网页上传音频文件并填写邮件等信息。
+2.  **任务提交**: 前端将数据 `POST` 到后端的 `/api/transcribe` 接口。
+3.  **后端接收与初步处理**:
+    *   FastAPI 接收请求，验证数据，保存音频文件到基于 `AUDIO_TARGET_DIR` 的任务专属目录。
+    *   在PostgreSQL数据库中创建一条任务记录，初始状态为 "submitted"。
+    *   将核心的 `audio2memo` 处理流程作为一个后台任务启动。
+    *   立即向前端返回任务ID和任务已受理的消息。
+4.  **后台处理 (`audio2memo` 流程)**:
+    *   后台任务按顺序执行音频分割、转录、逐字稿生成、纪要初稿生成、DOCX文档生成。
+    *   每完成一个关键步骤，后端会更新数据库中对应任务的状态字段（如 `processing_audio_split`, `transcribing`, 等）。
+5.  **前端状态轮询**: 前端通过任务ID定期（每5秒）调用 `/api/tasks` (或 `/api/task_status/{task_id}`) 接口获取最新任务状态。
+6.  **任务完成与通知**:
+    *   处理成功：更新数据库状态为 "completed"，记录结果文件信息，并通过邮件发送包含 `.docx` 附件的成功通知。
+    *   处理失败：更新数据库状态为 "failed"，记录错误信息，并通过邮件发送失败通知。
+7.  **结果展示**: 前端根据轮询到的状态，向用户展示任务进度；任务完成后，用户将通过邮件收到结果。
+
+## 七、数据库
 
 系统使用 **PostgreSQL** 数据库存储所有任务的详细信息，以便进行任务追踪、状态管理和潜在的后续分析。
 
@@ -129,7 +192,7 @@ DATABASE_URL="postgresql://user:password@host:port/database"
 完整的字段列表和模型定义参见 `AI_Frontend/backend_fastapi/app/db.py`。
 由于所有任务信息均完整记录在数据库中，支持后续通过SQL等方式进行查询、统计和分析，无需专门开发前端统计界面。
 
-## 七、安全部署
+## 八、安全部署
 
 *   **内网部署**: 本系统设计为仅在公司内部网络环境部署和使用。所有API接口和Web服务不应暴露于公网。
 *   **防火墙**: 强烈建议通过公司防火墙策略，限制只有授权的内网IP地址段或特定用户子网才能访问后端API服务端口和前端Web服务。
@@ -148,7 +211,7 @@ DATABASE_URL="postgresql://user:password@host:port/database"
     *   具体的IP段、端口和防火墙配置命令请咨询公司IT或网络管理员。
 *   **用户认证**: 鉴于内网部署和防火墙的保护，当前版本的系统未实现应用层级的用户认证和复杂的权限管理功能，以简化开发和运维。如未来需求变化，可再行考虑。
 
-## 八、待办事项与未来展望
+## 九、待办事项与未来展望
 
 以下是当前项目中一些待进一步完善或未来可以考虑扩展的方向：
 
@@ -166,7 +229,7 @@ DATABASE_URL="postgresql://user:password@host:port/database"
     *   **更丰富的错误提示**: 当前端从API接收到错误时，可以提供更具体、用户友好的错误信息和处理建议。
 
 ---
-## 十一、前后端集成状态与后续对齐计划 (已更新)
+## 十、前后端集成状态与后续对齐计划 (已更新)
 
 **A. 核心目标与原则：**
 *   **配置统一管理**：所有后端配置（API密钥、服务URL、文件路径等）均通过项目根目录下的 `.env` 文件管理，由应用启动时加载。禁止在代码中硬编码配置。
@@ -207,7 +270,7 @@ DATABASE_URL="postgresql://user:password@host:port/database"
     *   `audio2memo/run.py`: 已删除。
     *   `audio2memo/requirements.txt`: 已删除，相关必要依赖已在主 `requirements.txt` 中确认或添加。
 
-**C. 后续主要关注点（已在"八、待办事项与未来展望"中体现）：**
+**C. 后续主要关注点（已在"九、待办事项与未来展望"中体现）：**
 
 1.  **日志记录**：全面推广使用 `logging` 模块替换 `print` 语句。
 2.  **错误处理**：增强 `audio2memo` 内部的错误捕获和向上传递机制。
